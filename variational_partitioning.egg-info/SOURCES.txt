@@ -1,0 +1,10 @@
+LICENSE
+README.md
+setup.py
+variational_partitioning.py
+variational_partitioning.egg-info/PKG-INFO
+variational_partitioning.egg-info/SOURCES.txt
+variational_partitioning.egg-info/dependency_links.txt
+variational_partitioning.egg-info/entry_points.txt
+variational_partitioning.egg-info/requires.txt
+variational_partitioning.egg-info/top_level.txt

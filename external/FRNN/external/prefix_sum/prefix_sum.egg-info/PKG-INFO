@@ -1,0 +1,5 @@
+Metadata-Version: 2.1
+Name: prefix-sum
+Version: 0.0.0
+Summary: Parallel Prefix Sum on CUDA with Pytorch API
+Author: Matt Dean, Lixin Xue

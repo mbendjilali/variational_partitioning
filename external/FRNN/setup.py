@@ -19,8 +19,10 @@ def get_extensions():
     extra_compile_args = {"cxx": ["-std=c++14"]}
 
     nvcc_args = [
-        "-DCUDA_HAS_FP16=1", "-D__CUDA_NO_HALF_OPERATORS__",
-        "-D__CUDA_NO_HALF_CONVERSIONS__", "-D__CUDA_NO_HALF2_OPERATORS__",
+        "-DCUDA_HAS_FP16=1",
+        "-D__CUDA_NO_HALF_OPERATORS__",
+        "-D__CUDA_NO_HALF_CONVERSIONS__",
+        "-D__CUDA_NO_HALF2_OPERATORS__",
         "--ftemplate-depth=2048"
         # "–pending_instantiations=2048",
     ]
@@ -41,11 +43,13 @@ def get_extensions():
     # include_dirs = [extensions_dir]
     include_dirs = torch.utils.cpp_extension.include_paths() + [extensions_dir]
     ext_modules = [
-        extension("frnn._C",
-                  sources,
-                  include_dirs=include_dirs,
-                  define_macros=[],
-                  extra_compile_args=extra_compile_args)
+        extension(
+            "frnn._C",
+            sources,
+            include_dirs=include_dirs,
+            define_macros=[],
+            extra_compile_args=extra_compile_args,
+        )
     ]
     print(sources)
     return ext_modules
@@ -61,7 +65,6 @@ def get_extensions():
 
 
 class BuildExtension(torch.utils.cpp_extension.BuildExtension):
-
     def __init__(self, *args, **kwargs):
         super().__init__(use_ninja=False, *args, **kwargs)
 

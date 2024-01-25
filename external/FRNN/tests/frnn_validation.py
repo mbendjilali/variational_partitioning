@@ -7,16 +7,14 @@ from pytorch3d.ops.knn import knn_points
 
 
 class TestFRNN:
-
     def __init__(self, fname, num_pcs=1, K=5, r=0.1, same=False):
         pc1 = torch.load(fname)
         pc2 = torch.load(fname)
         if not same:
             num_points_fixed_query = 100000
-            pc1 = torch.rand((num_pcs, num_points_fixed_query, 3),
-                             dtype=torch.float)
+            pc1 = torch.rand((num_pcs, num_points_fixed_query, 3), dtype=torch.float)
         self.num_pcs = num_pcs
-        self.fname = fname.split('/')[-1]
+        self.fname = fname.split("/")[-1]
         self.K = K
         self.r = r
         num_points = pc2.shape[1]
@@ -37,8 +35,7 @@ class TestFRNN:
         if same:
             lengths1 = torch.ones((num_pcs,), dtype=torch.long) * num_points
         else:
-            lengths1 = torch.ones(
-                (num_pcs,), dtype=torch.long) * num_points_fixed_query
+            lengths1 = torch.ones((num_pcs,), dtype=torch.long) * num_points_fixed_query
         lengths2 = torch.ones((num_pcs,), dtype=torch.long) * num_points
         self.lengths1_cuda = lengths1.cuda()
         self.lengths2_cuda = lengths2.cuda()
@@ -47,40 +44,46 @@ class TestFRNN:
         # self.grad_dists = torch.ones((num_pcs, pc1.shape[0], K), dtype=torch.float32).cuda()
 
     def frnn_grid(self):
-        dists, idxs, nn, grid = frnn.frnn_grid_points(self.pc1_frnn,
-                                                      self.pc2_frnn,
-                                                      self.lengths1_cuda,
-                                                      self.lengths2_cuda,
-                                                      K=self.K,
-                                                      r=self.r,
-                                                      grid=None,
-                                                      return_nn=True,
-                                                      return_sorted=True)
+        dists, idxs, nn, grid = frnn.frnn_grid_points(
+            self.pc1_frnn,
+            self.pc2_frnn,
+            self.lengths1_cuda,
+            self.lengths2_cuda,
+            K=self.K,
+            r=self.r,
+            grid=None,
+            return_nn=True,
+            return_sorted=True,
+        )
         if self.grid is None:
             self.grid = grid
         return dists, idxs, nn
 
     def frnn_grid_reuse(self):
-        dists, idxs, nn, _ = frnn.frnn_grid_points(self.pc1_frnn_reuse,
-                                                   self.pc2_frnn_reuse,
-                                                   self.lengths1_cuda,
-                                                   self.lengths2_cuda,
-                                                   K=self.K,
-                                                   r=self.r,
-                                                   grid=self.grid,
-                                                   return_nn=True,
-                                                   return_sorted=True)
+        dists, idxs, nn, _ = frnn.frnn_grid_points(
+            self.pc1_frnn_reuse,
+            self.pc2_frnn_reuse,
+            self.lengths1_cuda,
+            self.lengths2_cuda,
+            K=self.K,
+            r=self.r,
+            grid=self.grid,
+            return_nn=True,
+            return_sorted=True,
+        )
         return dists, idxs, nn
 
     def knn(self):
-        dists, idxs, nn = knn_points(self.pc1_knn,
-                                     self.pc2_knn,
-                                     self.lengths1_cuda,
-                                     self.lengths2_cuda,
-                                     K=self.K,
-                                     version=-1,
-                                     return_nn=True,
-                                     return_sorted=True)
+        dists, idxs, nn = knn_points(
+            self.pc1_knn,
+            self.pc2_knn,
+            self.lengths1_cuda,
+            self.lengths2_cuda,
+            K=self.K,
+            version=-1,
+            return_nn=True,
+            return_sorted=True,
+        )
         # for backward, assume all we have k neighbors within the radius
         # mask = dists > self.r * self.r
         # idxs[mask] = -1
@@ -103,16 +106,15 @@ class TestFRNN:
         # forward
         dists_knn, idxs_knn, nn_knn = self.knn()
         dists_frnn, idxs_frnn, nn_frnn = self.frnn_grid()
-        dists_frnn_reuse, idxs_frnn_reuse, nn_frnn_reuse = self.frnn_grid_reuse(
-        )
+        dists_frnn_reuse, idxs_frnn_reuse, nn_frnn_reuse = self.frnn_grid_reuse()
 
         # modify results of knn to make it match the results of frnn
         mask = idxs_frnn == -1
         idxs_knn[mask] = -1
         dists_knn[mask] == dists_frnn[mask]
-        nn_knn[mask[..., None].expand(-1, -1, -1,
-                                      3)] = nn_frnn[mask[..., None].expand(
-                                          -1, -1, -1, 3)]
+        nn_knn[mask[..., None].expand(-1, -1, -1, 3)] = nn_frnn[
+            mask[..., None].expand(-1, -1, -1, 3)
+        ]
 
         # dists_frnn_bf, idxs_frnn_bf = self.frnn_bf()
 
@@ -126,11 +128,18 @@ class TestFRNN:
 
         # idxs_all_same = torch.all(idxs_frnn == idxs_knn).item()
         # idxs_all_same_reuse = torch.all(idxs_frnn_reuse == idxs_knn).item()
-        diff_keys_percentage = torch.sum(idxs_frnn == idxs_knn).type(
-            torch.float).item() / self.K / self.pc1_knn.shape[1] / self.num_pcs
-        diff_keys_percentage_reuse = torch.sum(
-            idxs_frnn_reuse == idxs_knn).type(torch.float).item(
-            ) / self.K / self.pc1_knn.shape[1] / self.num_pcs
+        diff_keys_percentage = (
+            torch.sum(idxs_frnn == idxs_knn).type(torch.float).item()
+            / self.K
+            / self.pc1_knn.shape[1]
+            / self.num_pcs
+        )
+        diff_keys_percentage_reuse = (
+            torch.sum(idxs_frnn_reuse == idxs_knn).type(torch.float).item()
+            / self.K
+            / self.pc1_knn.shape[1]
+            / self.num_pcs
+        )
         dists_all_close = torch.allclose(dists_frnn, dists_knn)
         dists_all_close_reuse = torch.allclose(dists_frnn_reuse, dists_knn)
         # nn_all_close = torch.allclose(nn_frnn, nn_knn)
@@ -172,13 +181,19 @@ def normalize_pc(pc):
 if __name__ == "__main__":
     fnames = sorted(glob.glob("data/pc/*.pt"))
     print(fnames)
-    with open("tests/output/frnn_validation.csv", 'w') as csvfile:
+    with open("tests/output/frnn_validation.csv", "w") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow([
-            'Point cloud', 'Num points', 'Different key percentage',
-            'Dists all close', 'Different key percentage reuse',
-            'Dists all close reuse', ''
-        ])
+        writer.writerow(
+            [
+                "Point cloud",
+                "Num points",
+                "Different key percentage",
+                "Dists all close",
+                "Different key percentage reuse",
+                "Dists all close reuse",
+                "",
+            ]
+        )
         for fname in fnames:
             validator = TestFRNN(fname, same=False)
             results = validator.compare_frnn_knn()
@@ -188,14 +203,13 @@ if __name__ == "__main__":
             # print(results)
             # writer.writerow(results)
 
-    with open("tests/output/frnn_validation_same.csv", 'w') as csvfile:
+    with open("tests/output/frnn_validation_same.csv", "w") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow([
-            'Point cloud', 'Num points', 'Different key percentage',
-            'Dists all close'
-        ])
+        writer.writerow(
+            ["Point cloud", "Num points", "Different key percentage", "Dists all close"]
+        )
         for fname in fnames:
-            if 'xyz' in fname or 'lucy' in fname:
+            if "xyz" in fname or "lucy" in fname:
                 continue
             validator = TestFRNN(fname, same=True)
             results = validator.compare_frnn_knn()

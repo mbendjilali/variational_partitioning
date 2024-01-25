@@ -1,5 +1,5 @@
 import torch
-from FRNN.frnn import frnn
+from external.FRNN.frnn import frnn
 
 
 def knn_1(
