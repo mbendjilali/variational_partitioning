@@ -56,7 +56,7 @@ class DataHolder:
         k_min=5,
         k_step=-1,
         k_min_search=25,
-    ) -> torch.Tensor:
+    ) -> None:
         self.knn()
 
         if self.pos is not None:
@@ -103,33 +103,23 @@ class DataHolder:
 
             normal = f[:, 4:7].view(-1, 3).to("cuda:0")
             normal[normal[:, 2] < 0] *= -1
-            return normal
+            self.normal = normal
         else:
             raise ValueError("self.pos is None.")
 
     def estimate_plane_quadrics(self) -> None:
-        normals = self.estimate_normals()
+        self.estimate_normals()
 
         # Equation 4 except we compute sqrt(a)
         support_areas = self.neighbor_distance.sum(dim=1) / (25 * np.sqrt(2))
         support_areas = support_areas.view(-1, 1)
 
-        row_by_row_dot_product = (-normals * self.pos).sum(dim=1).view(-1, 1)
+        row_by_row_dot_product = (-self.normal * self.pos).sum(dim=1).view(-1, 1)
         # Equation 3 except we don't actually compute the plane quadrics and
         # instead we just store (n_x, n_y, n_z, -n.p_T)
-        quadrics = torch.cat((normals, row_by_row_dot_product), dim=1)
+        quadrics = torch.cat((self.normal, row_by_row_dot_product), dim=1)
         self.plane_quadrics = support_areas * quadrics
         return None
-
-    # def compute_diffused_quadric(
-    #     self,
-    #     neighbor_indices: torch.Tensor,
-    # ) -> torch.Tensor:
-    #     return torch.einsum(
-    #         "ij,ik->ijk",
-    #         self.plane_quadrics[neighbor_indices],
-    #         self.plane_quadrics[neighbor_indices],
-    #     ).sum(dim=0)
 
     def compute_diffused_quadric(
         self,
@@ -148,10 +138,31 @@ class DataHolder:
 
     def to_las(self, output_path: Path) -> None:
         lasheader = laspy.LasHeader(version="1.4", point_format=3)
+        lasheader.add_extra_dim(
+            laspy.ExtraBytesParams(
+                name="normal_x",
+                type=np.float64,  # type: ignore
+            )
+        )
+        lasheader.add_extra_dim(
+            laspy.ExtraBytesParams(
+                name="normal_y",
+                type=np.float64,  # type: ignore
+            )
+        )
+        lasheader.add_extra_dim(
+            laspy.ExtraBytesParams(
+                name="normal_z",
+                type=np.float64,  # type: ignore
+            )
+        )
         lasdata = laspy.LasData(lasheader)
         lasdata.x = self.pos[:, 0].cpu().numpy()
         lasdata.y = self.pos[:, 1].cpu().numpy()
         lasdata.z = self.pos[:, 2].cpu().numpy()
+        lasdata.normal_x = self.normal[:, 0].cpu().numpy()
+        lasdata.normal_y = self.normal[:, 1].cpu().numpy()
+        lasdata.normal_z = self.normal[:, 2].cpu().numpy()
         lasdata.intensity = self.intensity
         lasdata.classification = self.classification
         lasdata.write(str(output_path))

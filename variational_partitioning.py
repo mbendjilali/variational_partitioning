@@ -27,9 +27,9 @@ def sizes_to_pointers(sizes: torch.LongTensor):
 
 
 def normalize_positions(pos: torch.Tensor) -> torch.Tensor:
-    pos[:, 0] = (pos[:, 0] - pos[:, 0].min()) / (pos[:, 0].max() - pos[:, 0].min())
-    pos[:, 1] = (pos[:, 1] - pos[:, 1].min()) / (pos[:, 1].max() - pos[:, 1].min())
-    pos[:, 2] = (pos[:, 2] - pos[:, 2].min()) / (pos[:, 2].max() - pos[:, 2].min())
+    pos[:, 0] = (pos[:, 0] - pos[:, 0].min()) # / maximum_offset
+    pos[:, 1] = (pos[:, 1] - pos[:, 1].min()) # / maximum_offset
+    pos[:, 2] = (pos[:, 2] - pos[:, 2].min()) # / maximum_offset
     return pos
 
 
@@ -37,19 +37,19 @@ class VariationalParitioning:
     def __init__(
         self,
         data: DataHolder,
-        lambda_l2: List[float] = [1e-6],
-        nb_of_gen: List[int] = [16],
+        lambda_l2: float = 1e-5,
+        nb_of_gen: List[int] = [16, 64, 128],
     ) -> None:
         self.data = data
         self.lambda_l2 = lambda_l2
-
+        self.nb_of_gen = nb_of_gen
         self.qem = -torch.ones((self.data.pos.shape[0], 3))
         self.cluster_class = -torch.ones((self.data.pos.shape[0], 3))
 
         self.generators = {
-            0: sample(range(self.data.pos.shape[0]), nb_of_gen[0]),
-            1: sample(range(self.data.pos.shape[0]), nb_of_gen[1]),
-            2: sample(range(self.data.pos.shape[0]), nb_of_gen[2]),
+            0: sample(range(self.data.pos.shape[0]), 4),
+            1: sample(range(self.data.pos.shape[0]), 4),
+            2: sample(range(self.data.pos.shape[0]), 4),
         }
 
     def compute_cost(  # In Development
@@ -82,10 +82,10 @@ class VariationalParitioning:
 
         # L2 cost for Voronoï-like regularity.
         l2_cost = torch.sum((pos - gen_pos) ** 2, dim=2)
-        total_cost = qem + self.lambda_l2[gen] * l2_cost
+        total_cost = qem + self.lambda_l2 * l2_cost
         return total_cost, qem
 
-    def make_clusters(self, max_iter: int = 16) -> None:
+    def make_clusters(self, max_iter=16) -> None:
         """
         TODO comment.
         """
@@ -101,19 +101,39 @@ class VariationalParitioning:
                     -1, 1
                 )
                 t_c_f_idx = torch.cat([row_indices, total_cost_flat.view(-1, 1)], dim=1)
-                
+
                 self.cluster_class[:, gen] = total_cost_flat
                 self.qem[:, gen] = qem[t_c_f_idx[:, 0], t_c_f_idx[:, 1]]
 
                 df = pd.DataFrame(
                     torch.cat((self.cluster_class, self.qem), dim=1)  # type: ignore
                 )
+                new_generators = []
+                highest_qems = []
                 for cluster_index in range(len(self.generators[gen])):
-                    cluster_qems = df[df[gen] == cluster_index][gen + 1]
+                    cluster_qems = df[df[gen] == cluster_index][gen + 3]
                     if cluster_qems.empty:
                         continue
                     lowest_qem_id = cluster_qems.idxmin()
+                    new_generators.append(cluster_qems.idxmax())
+                    highest_qems.append(cluster_qems.max())
                     self.generators[gen][cluster_index] = lowest_qem_id  # type: ignore
+
+                next_nb_of_gen = (
+                    len(self.generators[gen]) + len(new_generators) // 2 + 1
+                )
+                if len(self.generators[gen]) == self.nb_of_gen[gen]:
+                    continue
+                elif (
+                    next_nb_of_gen <= self.nb_of_gen[gen]
+                ):  # Fill up the number of generators until reached.
+                    self.generators[gen] += sample(
+                        new_generators, len(new_generators) // 2 + 1
+                    )  # We can control the pace at which we introduce new generators.
+                else:
+                    self.generators[gen] += sample(
+                        new_generators, -len(self.generators[gen]) + self.nb_of_gen[gen]
+                    )
 
 
 def varpart_to_las(
@@ -127,25 +147,25 @@ def varpart_to_las(
             type=np.int64,  # type: ignore
         )
     )
-    # lasheader.add_extra_dim(
-    #     laspy.ExtraBytesParams(
-    #         name="cluster_class_1",
-    #         type=np.int64,  # type: ignore
-    #     )
-    # )
-    # lasheader.add_extra_dim(
-    #     laspy.ExtraBytesParams(
-    #         name="cluster_class_2",
-    #         type=np.int64,  # type: ignore
-    #     )
-    # )
+    lasheader.add_extra_dim(
+        laspy.ExtraBytesParams(
+            name="cluster_class_1",
+            type=np.int64,  # type: ignore
+        )
+    )
+    lasheader.add_extra_dim(
+        laspy.ExtraBytesParams(
+            name="cluster_class_2",
+            type=np.int64,  # type: ignore
+        )
+    )
     lasdata = laspy.LasData(lasheader)
     lasdata.x = varpart.data.pos[:, 0].cpu().numpy()
     lasdata.y = varpart.data.pos[:, 1].cpu().numpy()
     lasdata.z = varpart.data.pos[:, 2].cpu().numpy()
     lasdata.cluster_class_0 = varpart.cluster_class[:, 0].cpu().numpy()
-    # lasdata.cluster_class_1 = varpart.cluster_class[:, 1].cpu().numpy()
-    # lasdata.cluster_class_2 = varpart.cluster_class[:, 2].cpu().numpy()
+    lasdata.cluster_class_1 = varpart.cluster_class[:, 1].cpu().numpy()
+    lasdata.cluster_class_2 = varpart.cluster_class[:, 2].cpu().numpy()
     lasdata.classification = varpart.data.classification
     lasdata.write(str(outpath))
 
@@ -180,6 +200,7 @@ def main(
         varpart.make_clusters()
         output_path = output_dir / input_path.name
         varpart_to_las(varpart=varpart, outpath=output_path)
+        break
 
 
 if __name__ == "__main__":
