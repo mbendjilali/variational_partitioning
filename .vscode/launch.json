@@ -13,9 +13,9 @@
             "justMyCode": true,
             "args": [
                 "--in",
-                "/data/Moussa/variational_partitioning/input_las",
+                "/data/Moussa/input_las",
                 "--out",
-                "/data/Moussa/variational_partitioning/varpart_las",
+                "/data/Moussa/varpart_las",
             ]
         }
     ]

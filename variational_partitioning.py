@@ -10,7 +10,7 @@ import laspy
 from pathlib import Path
 import pandas as pd
 from typing import List
-from data_holder import DataHolder
+from data import Data
 from random import sample
 from tqdm import tqdm
 import click
@@ -27,16 +27,16 @@ def sizes_to_pointers(sizes: torch.LongTensor):
 
 
 def normalize_positions(pos: torch.Tensor) -> torch.Tensor:
-    pos[:, 0] = (pos[:, 0] - pos[:, 0].min()) # / maximum_offset
-    pos[:, 1] = (pos[:, 1] - pos[:, 1].min()) # / maximum_offset
-    pos[:, 2] = (pos[:, 2] - pos[:, 2].min()) # / maximum_offset
+    pos[:, 0] = pos[:, 0] - pos[:, 0].min()  # / maximum_offset
+    pos[:, 1] = pos[:, 1] - pos[:, 1].min()  # / maximum_offset
+    pos[:, 2] = pos[:, 2] - pos[:, 2].min()  # / maximum_offset
     return pos
 
 
 class VariationalParitioning:
     def __init__(
         self,
-        data: DataHolder,
+        data: Data,
         lambda_l2: float = 1e-5,
         nb_of_gen: List[int] = [16, 64, 128],
     ) -> None:
